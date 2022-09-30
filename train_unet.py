@@ -1,146 +1,108 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Oct 15 01:29:28 2021
+Created on Tue Mar 15 10:09:39 2022
 
 @author: josef
 """
-
-from data import get_data
-from utils import (get_loaders, save_model, check_dice, 
-                   save_predictions_as_imgs2, saveTrainDetails, 
-                   save_graphtv)
-from train_model import trainAndvalid
-from model import UNET
-
-import torch
 import os
-from torchsummary import summary
-import albumentations as A
-from albumentations.augmentations.transforms import ElasticTransform
-
-import torch.optim as optim
-from torchgeometry.losses import dice_loss
+import torch
 import torch.nn as nn
-
-import numpy as np
-
+from loader import loaders
+from visualization_utils import visualize_augmentations
+from utils import save_graphtv, save_graphtvd
+from model import UNET
+import torch.optim as optim
 from loss_f import combo_loss
+from train_valid import train_and_validate
+from predict import test
+from torchinfo import summary
+from utils import saveTrainDetails, save_model
 
-"""Get data for train and validation, data of filenames (list)"""
-def loaders(size_train, height, width, NUM_WORKERS):
-    TRAIN_IMG_DIR, VAL_IMG_DIR, TRAIN_MASK_DIR, VAL_MASK_DIR = get_data(size_train)
-    BATCH_SIZE = 1
-    IMAGE_HEIGHT = height #384  # 768 originally
-    IMAGE_WIDTH = width #512   # 1024 originally
-    PIN_MEMORY = True
-    train_transform = A.Compose(
-                [
-                    A.Resize(height=IMAGE_HEIGHT, width=IMAGE_WIDTH),
-                    A.HorizontalFlip(p=0.5),
-                    ElasticTransform(alpha=1, sigma=10, alpha_affine=20, interpolation=2, 
-                                     border_mode= 0, approximate=True, p=0.8),
-                    A.Normalize(
-                        mean=[0.0, 0.0, 0.0],
-                        std=[1.0, 1.0, 1.0],
-                        max_pixel_value=255.0,),
-                ],)
-    val_transform = A.Compose(
-                    [
-                        A.Resize(height=IMAGE_HEIGHT, width=IMAGE_WIDTH),
-                        A.Normalize(
-                            mean=[0.0, 0.0, 0.0],
-                            std=[1.0, 1.0, 1.0],
-                            max_pixel_value=255.0,),
-                    ],)
-    train_loader, val_loader =get_loaders(
-              TRAIN_IMG_DIR,
-              TRAIN_MASK_DIR,
-              VAL_IMG_DIR,
-              VAL_MASK_DIR,
-              BATCH_SIZE,
-              train_transform,
-              val_transform,
-              NUM_WORKERS,
-              PIN_MEMORY,
-              )
-    return train_loader, val_loader
+#%%Directorio de imágenes y loaders
+# path_images='C://Users//josef//OneDrive - Universidad Veracruzana//Maestria CIIA//3_Semestre//Temas Selectos CE//Implementation//deap//neuroevolution_deap//images'
+# path_images='/content/gdrive/MyDrive/images'
+path_images = '/home/202201016n/serverBUAP/images' 
 
+NUM_WORKERS = 0 if torch.cuda.is_available() else 0 #Also used for dataloaders
+IMAGE_HEIGHT = 288
+IMAGE_WIDTH = 480
+"""Get train and valid loader"""
+loaders=loaders(0.7, 0.15, 0.15, path_images=path_images, batch_size=1, num_workers=NUM_WORKERS)
+
+#%%Muestra ejemplos de datos aumentado
+# _, train_ds=loaders.get_train_loader(288,480)
+# _, val_ds = loaders.get_val_loader(288,480)
+# _, test_ds = loaders.get_test_loader(288,480)
+# # for idx in range(len(test_ds)):
+# visualize_augmentations(test_ds, idx=0, samples=3)
+    
+
+#%%Folder to storage
 """Create folder to storage"""
-corrida='unet_ce2_100'
-path=os.getcwd()
-# path='/content/gdrive/MyDrive/unet'
-ruta=path+"/corrida"+str(corrida)
+corrida='unet'
+# path=os.getcwd()
+path='/scratch/202201016n/'
+ruta=path+"/"+str(corrida)
 if not os.path.exists(ruta):
     os.makedirs(ruta)
     
-NUM_WORKERS = 0 if torch.cuda.is_available() else 0 #Also used for dataloaders
-#EPOCHS = 0 if torch.cuda.is_available() else 0
-IMAGE_HEIGHT = 384 
-IMAGE_WIDTH = 512
-"""Get train and valid loader"""
-train_loader, val_loader = loaders(size_train=0.7, height=IMAGE_HEIGHT, 
-                                   width=IMAGE_WIDTH, NUM_WORKERS=NUM_WORKERS)
-
-"""Create UNET model"""
+#%% Create U-Net Model
 model = UNET(in_channels=3, out_channels=2)
 
+#%%Hyperparameters for train and validate model
 """Hyperparameters for train"""
+EPOCHS = 10 if torch.cuda.is_available() else 0
 LEARNING_RATE = 1e-4
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-NUM_EPOCHS = 100
 LOAD_MODEL = False
 
 """Optimizer"""
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
         
 """Loss function"""
-LOSS_FN = nn.CrossEntropyLoss()#dice_loss
-# LOSS_FN = combo_loss
+LOSS_FN = combo_loss#nn.CrossEntropyLoss()#combo_loss
+"""For save images or model"""
+save_model_flag=False
+save_images_flag=True
 
-"""Train Model"""
-dices, train_loss, valid_loss = trainAndvalid(
-    model,
-    train_loader,
-    val_loader,
-    NUM_EPOCHS,
-    
-    LOSS_FN,
-    LEARNING_RATE,
-    optimizer,
-    
-    DEVICE,
-    NUM_WORKERS,
-    LOAD_MODEL,
-    ruta, #Ruta donde se encuentra localizado el modelo si se desea cargar
+"""Train, val and test loaders"""
+train_loader, _= loaders.get_train_loader(IMAGE_HEIGHT, IMAGE_WIDTH)
+val_loader, _  =loaders.get_val_loader(IMAGE_HEIGHT, IMAGE_WIDTH)
+test_loader, _ =loaders.get_test_loader(IMAGE_HEIGHT, IMAGE_WIDTH)
+
+#%%Train and validate model
+"""Train and valid model"""
+train_loss, valid_loss, train_dice, valid_dice = train_and_validate(
+    model, train_loader, val_loader,
+    EPOCHS, optimizer, LOSS_FN,
+    DEVICE, LOAD_MODEL, save_model_flag,
+    ruta=ruta
     )
 
-print('\n Dice Index =', np.mean(dices))
+#%%Test model
+dices, ious, hds = test(test_loader, model, LOSS_FN,
+                        save_imgs=save_images_flag, ruta=ruta, device=DEVICE)
 
-"""Save train and valid losss"""
-save_graphtv(train_loss, valid_loss, ruta, 'TrainValidationLoss')
-
-"""Save model"""
+#%%Save model
 save_model(model, optimizer, ruta)
 
-"""Determina número de parámetros"""
+#%%Train and validation loss
+save_graphtv(train_loss, valid_loss, ruta, 'TrainValidationLoss')
+save_graphtvd(train_dice, valid_dice, ruta, 'TrainValidationDice')
+
+
+#%%Número de parámetros
 model = model.to(DEVICE)
-model_stats = summary(model, (3, 384, 512), verbose=0)
+model_stats=summary(model, (1, 3, 288, 480), verbose=0)
 summary_model = str(model_stats)
 
 """Save train details"""
 saveTrainDetails(
     len(train_loader), len(val_loader),
-    LEARNING_RATE, NUM_EPOCHS,
+    LEARNING_RATE, EPOCHS,
     IMAGE_HEIGHT, IMAGE_WIDTH,
     LOSS_FN, optimizer,
-    np.mean(dices), np.std(dices),
-    np.max(dices), np.min(dices),
+    dices, ious, hds,
     summary_model,
-    ruta+'/UNET_Train_details.txt'
+    ruta+'/Retrain_best_details.txt'
     )
-
-"""Free GPU memory"""
-# print(torch.cuda.memory_allocated())
-# del model, optimizer, model_stats
-# torch.cuda.empty_cache()
-# print(torch.cuda.memory_allocated())
