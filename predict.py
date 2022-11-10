@@ -15,14 +15,18 @@ from tqdm import tqdm
 from PIL import Image, ImageFont, ImageDraw
 import torchvision.transforms.functional as TF
 import matplotlib.pyplot as plt
+from skimage import color
 
 class imgs():
     def __init__(self, im, gt, pr, dice, iou, hd):
+        #Si se trata de escala de grises
+        if im.shape[1]!=3:
+            im=torch.cat((im, im, im),dim=1) #color.gray2rgb(im.cpu())
+        
         im=im.squeeze()
         im=im.cpu().detach().numpy()
         self.im=np.transpose(im, (1,2,0))
-        #self.im = im
-        
+
         gt=gt.squeeze()
         gt=gt.cpu().detach().numpy()
         self.gt=np.transpose(gt, (1,2,0))
@@ -198,7 +202,8 @@ def set_title(tensor,string):
     
     w, h = font.getsize(string)
     draw=ImageDraw.Draw(pil_image)
-    draw.text(((256-w)/2, 15*(256-h)/16), string, font=font, fill='black')
+    wim, him = pil_image.size
+    draw.text(((wim-w)/2, 15*(him-h)/16), string, font=font, fill='blue')
     numpy=np.array(pil_image)
     numpy=np.transpose(numpy, (2,0,1))
     tensor=torch.from_numpy(numpy)

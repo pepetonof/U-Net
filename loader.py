@@ -38,14 +38,14 @@ class loaders():
                 A.GridDistortion(num_steps=10, border_mode=0, p=0.5),
                 #A.RandomGamma(gamma_limit=[10,20],p=1.0),
                 #A.GaussianBlur(p=1.0),
-                A.Normalize(
-                    mean=[0.0, 0.0, 0.0],
-                    std=[1.0, 1.0, 1.0],
-                    max_pixel_value=255.0,),
-                # # A.Normalize(
-                #     mean=[0.0],
-                #     std=[1.0],
+                # A.Normalize(
+                #     mean=[0.0, 0.0, 0.0],
+                #     std=[1.0, 1.0, 1.0],
                 #     max_pixel_value=255.0,),
+                A.Normalize(
+                    mean=[0.0],
+                    std=[1.0],
+                    max_pixel_value=255.0,),
                 ToTensorV2(),
             ],)
         train_ds = PlacentaDataSetMC(
@@ -68,14 +68,14 @@ class loaders():
                             A.ToGray(p=1.0),
                             # A.Equalize(p=1.0),
                             A.Resize(height=H, width=W),
-                            A.Normalize(
-                                mean=[0.0, 0.0, 0.0],
-                                std=[1.0, 1.0, 1.0],
-                                max_pixel_value=255.0,),
                             # A.Normalize(
-                            #     mean=[0.0],
-                            #     std=[1.0],
+                            #     mean=[0.0, 0.0, 0.0],
+                            #     std=[1.0, 1.0, 1.0],
                             #     max_pixel_value=255.0,),
+                            A.Normalize(
+                                mean=[0.0],
+                                std=[1.0],
+                                max_pixel_value=255.0,),
                             ToTensorV2(),
                         ],)
         val_ds = PlacentaDataSetMC(
@@ -99,14 +99,14 @@ class loaders():
                             A.ToGray(p=1.0),
                             # A.Equalize(p=1.0),
                             A.Resize(height=H, width=W),
-                            A.Normalize(
-                                mean=[0.0, 0.0, 0.0],
-                                std=[1.0, 1.0, 1.0],
-                                max_pixel_value=255.0,),
                             # A.Normalize(
-                            #     mean=[0.0],
-                            #     std=[1.0],
+                            #     mean=[0.0, 0.0, 0.0],
+                            #     std=[1.0, 1.0, 1.0],
                             #     max_pixel_value=255.0,),
+                            A.Normalize(
+                                mean=[0.0],
+                                std=[1.0],
+                                max_pixel_value=255.0,),
                             ToTensorV2(),
                         ],)
         test_ds = PlacentaDataSetMC(
